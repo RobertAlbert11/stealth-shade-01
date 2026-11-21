@@ -1,61 +1,51 @@
-// Every tuning number and colour in one place. The playfield is a fixed 1280x720 logical area;
-// the renderer scales it to the window, so no rule below depends on the screen size.
+// Shade Run — global tuning constants and palette.
+export const FIELD = { width: 1280, height: 720 };
 
-export const FIELD = { width: 1280, height: 720, groundY: 664 };
-
-/** The simulation's fixed step, in seconds: 60 updates a second whatever the display's rate. */
 export const STEP = 1 / 60;
 
-export const PLAYER = {
-  width: 72,
-  height: 24,
-  speed: 560,
-  invulnerable: 1.5,
-};
-
-export const LIVES = 3;
-
-export const BLOCK = {
-  minWidth: 40,
-  maxWidth: 110,
-  height: 36,
-  speed: 240,
-  speedPerLevel: 30,
-  speedJitter: 90,
-  interval: 0.55,
-  intervalScale: 0.88,
-  minInterval: 0.14,
-  dodgePoints: 1,
-};
-
-export const COIN = {
-  size: 24,
-  speed: 190,
-  speedPerLevel: 14,
-  interval: 1.4,
-  intervalJitter: 0.8,
-  points: 10,
-};
-
-/** Seconds of play per level, and the last level: speeds and spawn rates stop growing there. */
-export const LEVEL = { seconds: 12, max: 12 };
-
-/** How many falling things can exist at once; the pool is allocated once, at boot. */
-export const POOL_SIZE = 64;
-
 export const PALETTE = {
-  backdrop: '#11141b',
-  sky: '#1b1f2a',
-  ground: '#2a3040',
-  player: '#4fc3f7',
-  block: '#e5534b',
-  coin: '#f2c94c',
-  panel: '#252b38',
-  text: '#eef1f5',
-  muted: '#8b93a3',
+  floor: '#1b2027',
+  floorGrid: '#232b36',
+  wall: '#3a4552',
+  wallEdge: '#56657a',
+  crate: '#4a3b2a',
+  crateEdge: '#7a6446',
+  player: '#6fe3a8',
+  playerSneak: '#3fae76',
+  guard: '#e05555',
+  guardAlert: '#ffb03b',
+  guardAlertMax: '#ff4d2e',
+  cone: 'rgba(255, 220, 120, 0.16)',
+  coneAlert: 'rgba(255, 90, 60, 0.22)',
+  exit: '#4fc3f7',
+  text: '#dfe8f2',
+  dim: '#8b98a8',
+  hudBg: 'rgba(10, 14, 20, 0.82)',
+  accent: '#ffd45e',
+  backdrop: '#0b0e13',
 };
 
-export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+export const PLAYER = {
+  radius: 11,
+  walkSpeed: 175,
+  sneakSpeed: 85,
+  walkNoiseRadius: 160,
+  sneakNoiseRadius: 0,
+};
 
-/** Where the best score is kept between visits (this browser only). */
-export const BEST_KEY = 'block-dodger.best';
+export const GUARD = {
+  radius: 12,
+  patrolSpeed: 90,
+  alertSpeed: 160,
+  coneHalfAngle: Math.PI / 5,
+  coneRange: 260,
+  nearVisionRange: 110,
+  suspicionRate: 0.85,
+  suspicionDecay: 0.4,
+  suspicionMax: 100,
+  caughtThreshold: 100,
+  investigateTimeout: 5,
+  turnRate: 3.4,
+};
+
+export const EXIT_ZONE = { x: 1150, y: 40, w: 100, h: 90 };

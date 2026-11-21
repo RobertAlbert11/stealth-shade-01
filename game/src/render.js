@@ -1,141 +1,224 @@
-// Drawing only: the world's state and the current screen in, pixels out. The 1280x720 playfield
-// is scaled to fit the window and centred, the margin filled with the backdrop colour. Flat
-// rectangles and circles, canvas text for the HUD and the panels. Text that holds a number is
-// rebuilt only when the number changes, so a frame allocates nothing.
-import { FIELD, FONT, LIVES, PALETTE } from './config.js';
-import { KIND_COIN } from './world.js';
+// Shade Run — flat 2D canvas renderer: warehouse, cones, entities, HUD, screens.
+import { EXIT_ZONE, FIELD, GUARD, PALETTE, PLAYER } from './config.js';
+import { CRATES, WALLS } from './world.js';
+import { conePolygon } from './vision.js';
+import { STATE_ALERT, STATE_INVESTIGATE } from './guards.js';
 
 export const SCREEN_TITLE = 'title';
 export const SCREEN_PLAY = 'play';
-export const SCREEN_PAUSED = 'paused';
 export const SCREEN_OVER = 'over';
+export const SCREEN_WIN = 'win';
 
-/** The panel's width; its height grows with its lines: room for the title, the lines and the prompt. */
-const PANEL = { width: 600, top: 134, line: 34, bottom: 70 };
-const LIFE_SIZE = 20;
-const LIFE_GAP = 8;
+function drawWarehouse(ctx) {
+  ctx.fillStyle = PALETTE.floor;
+  ctx.fillRect(0, 0, FIELD.width, FIELD.height);
+  ctx.strokeStyle = PALETTE.floorGrid;
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= FIELD.width; x += 80) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, FIELD.height); ctx.stroke();
+  }
+  for (let y = 0; y <= FIELD.height; y += 80) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(FIELD.width, y); ctx.stroke();
+  }
+  // Exit zone
+  ctx.fillStyle = PALETTE.exit;
+  ctx.globalAlpha = 0.25;
+  ctx.fillRect(EXIT_ZONE.x, EXIT_ZONE.y, EXIT_ZONE.w, EXIT_ZONE.h);
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = PALETTE.exit;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(EXIT_ZONE.x, EXIT_ZONE.y, EXIT_ZONE.w, EXIT_ZONE.h);
+  ctx.fillStyle = PALETTE.exit;
+  ctx.font = 'bold 14px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('EXIT', EXIT_ZONE.x + EXIT_ZONE.w / 2, EXIT_ZONE.y + EXIT_ZONE.h / 2 + 5);
+  ctx.textAlign = 'left';
 
-function cachedLabel(prefix) {
-  let value = -1;
-  let text = '';
-  return function label(next) {
-    if (next !== value) {
-      value = next;
-      text = prefix + next;
-    }
-    return text;
-  };
+  for (const w of WALLS) {
+    ctx.fillStyle = PALETTE.wall;
+    ctx.fillRect(w.x, w.y, w.w, w.h);
+    ctx.strokeStyle = PALETTE.wallEdge;
+    ctx.strokeRect(w.x + 0.5, w.y + 0.5, w.w - 1, w.h - 1);
+  }
+  for (const c of CRATES) {
+    ctx.fillStyle = PALETTE.crate;
+    ctx.fillRect(c.x, c.y, c.w, c.h);
+    ctx.strokeStyle = PALETTE.crateEdge;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(c.x + 1, c.y + 1, c.w - 2, c.h - 2);
+    ctx.beginPath();
+    ctx.moveTo(c.x + 4, c.y + 4); ctx.lineTo(c.x + c.w - 4, c.y + c.h - 4);
+    ctx.moveTo(c.x + c.w - 4, c.y + 4); ctx.lineTo(c.x + 4, c.y + c.h - 4);
+    ctx.strokeStyle = PALETTE.crateEdge; ctx.lineWidth = 1; ctx.stroke();
+  }
 }
 
-export function createRenderer(canvas) {
-  const context = canvas.getContext('2d');
-  const view = { scale: 1, x: 0, y: 0 };
-  const scoreLabel = cachedLabel('Score ');
-  const levelLabel = cachedLabel('Level ');
-  const finalLabel = cachedLabel('Score ');
-  const bestLabel = cachedLabel('Best ');
+function drawCone(ctx, guard) {
+  const pts = conePolygon(guard);
+  ctx.beginPath();
+  ctx.moveTo(guard.x, guard.y);
+  for (const p of pts) ctx.lineTo(p.x, p.y);
+  ctx.closePath();
+  const alerting = guard.state === STATE_ALERT || guard.suspicion > 55;
+  ctx.fillStyle = alerting ? PALETTE.coneAlert : PALETTE.cone;
+  ctx.fill();
+}
 
-  function resize() {
-    const ratio = window.devicePixelRatio || 1;
-    const width = Math.round(window.innerWidth * ratio);
-    const height = Math.round(window.innerHeight * ratio);
-    canvas.width = width;
-    canvas.height = height;
-    view.scale = Math.min(width / FIELD.width, height / FIELD.height);
-    view.x = (width - FIELD.width * view.scale) / 2;
-    view.y = (height - FIELD.height * view.scale) / 2;
+function drawGuard(ctx, guard) {
+  drawCone(ctx, guard);
+  ctx.beginPath();
+  ctx.arc(guard.x, guard.y, GUARD.radius, 0, Math.PI * 2);
+  ctx.fillStyle = guard.state === STATE_ALERT ? PALETTE.guardAlertMax
+    : guard.state === STATE_INVESTIGATE ? PALETTE.guardAlert : PALETTE.guard;
+  ctx.fill();
+  ctx.strokeStyle = '#12161c';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // facing tick
+  ctx.beginPath();
+  ctx.moveTo(guard.x, guard.y);
+  ctx.lineTo(guard.x + Math.cos(guard.facing) * 18, guard.y + Math.sin(guard.facing) * 18);
+  ctx.strokeStyle = '#12161c';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  // suspicion bar
+  if (guard.suspicion > 2) {
+    const w = 34, frac = guard.suspicion / GUARD.suspicionMax;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(guard.x - w / 2, guard.y - GUARD.radius - 12, w, 5);
+    ctx.fillStyle = frac > 0.8 ? PALETTE.guardAlertMax : PALETTE.guardAlert;
+    ctx.fillRect(guard.x - w / 2, guard.y - GUARD.radius - 12, w * frac, 5);
   }
+}
 
-  const fonts = new Map();
-  function text(value, x, y, size, color, align) {
-    if (!fonts.has(size)) fonts.set(size, `${size}px ${FONT}`);
-    context.font = fonts.get(size);
-    context.fillStyle = color;
-    context.textAlign = align;
-    context.fillText(value, x, y);
+function drawPlayer(ctx, player) {
+  if (player.noiseRadius > 0) {
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.noiseRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
   }
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, PLAYER.radius, 0, Math.PI * 2);
+  ctx.fillStyle = player.sneaking ? PALETTE.playerSneak : PALETTE.player;
+  ctx.fill();
+  ctx.strokeStyle = '#0c2018';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(player.x, player.y);
+  ctx.lineTo(player.x + Math.cos(player.facing) * 15, player.y + Math.sin(player.facing) * 15);
+  ctx.strokeStyle = '#0c2018';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
 
-  function drawField(state) {
-    context.fillStyle = PALETTE.sky;
-    context.fillRect(0, 0, FIELD.width, FIELD.height);
-    context.fillStyle = PALETTE.ground;
-    context.fillRect(0, FIELD.groundY, FIELD.width, FIELD.height - FIELD.groundY);
-
-    const items = state.items;
-    for (let index = 0; index < items.length; index += 1) {
-      const item = items[index];
-      if (!item.active) continue;
-      if (item.kind === KIND_COIN) {
-        context.fillStyle = PALETTE.coin;
-        context.beginPath();
-        context.arc(item.x + item.width / 2, item.y + item.height / 2, item.width / 2, 0, Math.PI * 2);
-        context.fill();
-      } else {
-        context.fillStyle = PALETTE.block;
-        context.fillRect(item.x, item.y, item.width, item.height);
-      }
-    }
-
-    const player = state.player;
-    // Blink while invulnerable after a hit: hidden on every other tenth of a second.
-    if (player.invulnerable === 0 || Math.floor(player.invulnerable * 10) % 2 === 1) {
-      context.fillStyle = PALETTE.player;
-      context.fillRect(player.x, player.y, player.width, player.height);
-    }
+function drawMinimap(ctx, guards, player) {
+  const mw = 200, mh = 112, mx = FIELD.width - mw - 14, my = FIELD.height - mh - 14;
+  const sx = mw / FIELD.width, sy = mh / FIELD.height;
+  ctx.fillStyle = PALETTE.hudBg;
+  ctx.fillRect(mx, my, mw, mh);
+  ctx.strokeStyle = PALETTE.dim;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(mx + 0.5, my + 0.5, mw - 1, mh - 1);
+  ctx.fillStyle = PALETTE.wallEdge;
+  for (const w of WALLS) ctx.fillRect(mx + w.x * sx, my + w.y * sy, Math.max(1, w.w * sx), Math.max(1, w.h * sy));
+  ctx.fillStyle = PALETTE.crateEdge;
+  for (const c of CRATES) ctx.fillRect(mx + c.x * sx, my + c.y * sy, Math.max(1, c.w * sx), Math.max(1, c.h * sy));
+  ctx.fillStyle = PALETTE.exit;
+  ctx.fillRect(mx + EXIT_ZONE.x * sx, my + EXIT_ZONE.y * sy, EXIT_ZONE.w * sx, EXIT_ZONE.h * sy);
+  for (const g of guards) {
+    ctx.beginPath();
+    ctx.arc(mx + g.x * sx, my + g.y * sy, 3, 0, Math.PI * 2);
+    ctx.fillStyle = g.state === STATE_ALERT ? PALETTE.guardAlertMax : PALETTE.guard;
+    ctx.fill();
   }
+  ctx.beginPath();
+  ctx.arc(mx + player.x * sx, my + player.y * sy, 3, 0, Math.PI * 2);
+  ctx.fillStyle = PALETTE.player;
+  ctx.fill();
+}
 
-  function drawHud(state) {
-    context.textBaseline = 'top';
-    text(scoreLabel(state.score), 24, 20, 28, PALETTE.text, 'left');
-    text(levelLabel(state.level), FIELD.width / 2, 20, 28, PALETTE.text, 'center');
-    const firstLife = FIELD.width - 24 - LIVES * (LIFE_SIZE + LIFE_GAP) + LIFE_GAP;
-    text('Lives', firstLife - 12, 20, 28, PALETTE.text, 'right');
-    for (let life = 0; life < LIVES; life += 1) {
-      context.fillStyle = life < state.lives ? PALETTE.player : PALETTE.ground;
-      context.fillRect(firstLife + life * (LIFE_SIZE + LIFE_GAP), 24, LIFE_SIZE, LIFE_SIZE);
-    }
+function drawHud(ctx, state) {
+  const { player, guards, elapsed, maxSuspicion } = state;
+  ctx.fillStyle = PALETTE.hudBg;
+  ctx.fillRect(14, 14, 300, 66);
+  ctx.fillStyle = PALETTE.dim;
+  ctx.font = '12px monospace';
+  ctx.fillText('SHADE RUN', 26, 34);
+  ctx.fillStyle = PALETTE.text;
+  ctx.font = '14px monospace';
+  ctx.fillText(`TIME ${elapsed.toFixed(1)}s`, 26, 54);
+  ctx.fillText(player.sneaking ? 'SNEAK' : 'WALK', 26, 72);
+  // Global suspicion meter (max over guards)
+  const frac = Math.max(0, Math.min(1, maxSuspicion / GUARD.suspicionMax));
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  ctx.fillRect(140, 46, 150, 10);
+  ctx.fillStyle = frac > 0.8 ? PALETTE.guardAlertMax : PALETTE.guardAlert;
+  ctx.fillRect(140, 46, 150 * frac, 10);
+  ctx.strokeStyle = PALETTE.dim;
+  ctx.strokeRect(140.5, 46.5, 150, 10);
+  ctx.fillStyle = PALETTE.dim;
+  ctx.font = '10px monospace';
+  ctx.fillText('DETECTION', 140, 42);
+  // Guard states
+  const labels = guards.map((g) => (g.state === STATE_ALERT ? '!' : g.state === STATE_INVESTIGATE ? '?' : '.')).join(' ');
+  ctx.fillStyle = PALETTE.text;
+  ctx.font = '14px monospace';
+  ctx.fillText(`GUARDS [${labels}]`, 300, 72);
+  drawMinimap(ctx, guards, player);
+}
+
+function centerPanel(ctx, lines) {
+  ctx.fillStyle = 'rgba(6, 9, 14, 0.88)';
+  ctx.fillRect(FIELD.width / 2 - 330, FIELD.height / 2 - 140, 660, 280);
+  ctx.strokeStyle = PALETTE.accent;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(FIELD.width / 2 - 330, FIELD.height / 2 - 140, 660, 280);
+  ctx.textAlign = 'center';
+  let y = FIELD.height / 2 - 90;
+  for (const [text, font, color] of lines) {
+    ctx.font = font;
+    ctx.fillStyle = color;
+    ctx.fillText(text, FIELD.width / 2, y);
+    y += 38;
   }
+  ctx.textAlign = 'left';
+}
 
-  function drawPanel(title, lines, prompt) {
-    const height = PANEL.top + lines.length * PANEL.line + PANEL.bottom;
-    const x = (FIELD.width - PANEL.width) / 2;
-    const y = (FIELD.height - height) / 2;
-    context.fillStyle = PALETTE.panel;
-    context.fillRect(x, y, PANEL.width, height);
-    context.textBaseline = 'alphabetic';
-    text(title, FIELD.width / 2, y + 78, 48, PALETTE.text, 'center');
-    for (let index = 0; index < lines.length; index += 1) {
-      text(lines[index], FIELD.width / 2, y + PANEL.top + index * PANEL.line, 22, PALETTE.muted, 'center');
-    }
-    text(prompt, FIELD.width / 2, y + height - 40, 24, PALETTE.coin, 'center');
-  }
+export function render(ctx, screen, state) {
+  ctx.fillStyle = PALETTE.backdrop;
+  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  drawWarehouse(ctx);
 
-  const TITLE_LINES = ['Dodge the red blocks. Catch the gold coins.', 'Move with ← → or A D.  Pause with P.', ''];
-  const PAUSED_LINES = ['The blocks will wait for you.'];
-  const OVER_LINES = ['', ''];
-
-  /** Paint one frame: the field, then the HUD or a panel for the screen the game is on. */
-  function draw(state, screen, best) {
-    context.setTransform(1, 0, 0, 1, 0, 0);
-    context.fillStyle = PALETTE.backdrop;
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.setTransform(view.scale, 0, 0, view.scale, view.x, view.y);
-    drawField(state);
+  if (screen === SCREEN_PLAY) {
+    for (const g of state.guards) drawGuard(ctx, g);
+    drawPlayer(ctx, state.player);
+    drawHud(ctx, state);
+  } else {
+    for (const g of state.guards) drawGuard(ctx, g);
+    drawPlayer(ctx, state.player);
     if (screen === SCREEN_TITLE) {
-      TITLE_LINES[2] = bestLabel(best);
-      drawPanel('Block Dodger', TITLE_LINES, 'Press Space or click to start');
-      return;
-    }
-    drawHud(state);
-    if (screen === SCREEN_PAUSED) drawPanel('Paused', PAUSED_LINES, 'Press P to resume');
-    else if (screen === SCREEN_OVER) {
-      OVER_LINES[0] = finalLabel(state.score);
-      OVER_LINES[1] = bestLabel(best);
-      drawPanel('Game over', OVER_LINES, 'Press Space or click to play again');
+      centerPanel(ctx, [
+        ['SHADE RUN', 'bold 42px monospace', PALETTE.accent],
+        ['Slip through the warehouse unseen.', '16px monospace', PALETTE.text],
+        ['WASD / Arrows: move   Shift: sneak   Walk noise alerts guards', '13px monospace', PALETTE.dim],
+        ['Reach the EXIT without being caught.', '13px monospace', PALETTE.dim],
+        ['Press ENTER or SPACE to start', 'bold 16px monospace', PALETTE.player],
+      ]);
+    } else if (screen === SCREEN_OVER) {
+      centerPanel(ctx, [
+        ['CAUGHT!', 'bold 42px monospace', PALETTE.guardAlertMax],
+        [`You survived ${state.elapsed.toFixed(1)}s before the alarm.`, '16px monospace', PALETTE.text],
+        ['Press ENTER or SPACE to try again', 'bold 16px monospace', PALETTE.player],
+      ]);
+    } else if (screen === SCREEN_WIN) {
+      centerPanel(ctx, [
+        ['CLEAN ESCAPE', 'bold 42px monospace', PALETTE.player],
+        [`Reached the exit in ${state.elapsed.toFixed(1)}s, unseen.`, '16px monospace', PALETTE.text],
+        ['Press ENTER or SPACE to play again', 'bold 16px monospace', PALETTE.player],
+      ]);
     }
   }
-
-  resize();
-  window.addEventListener('resize', resize);
-  return { draw };
 }
