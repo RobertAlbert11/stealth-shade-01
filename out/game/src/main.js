@@ -220,11 +220,18 @@ function boot() {
     }
     if (shot === 'start') screen = SCREEN_TITLE;
     if (shot === 'play' || shot === 'museum' || shot === 'vault') screen = SCREEN_PLAY;
+    // Cinematic framing: nudge every guard into a hot, readable state so each
+    // still shows big glowing cones + suspicion bars; then zoom toward the action.
+    for (const g of state2.guards) {
+      if (g.suspicion < 42) g.suspicion = 42;
+    }
+    if (state2.maxSuspicion < 64) state2.maxSuspicion = 64;
     if (shot === 'play') {
-      // Park the player behind the big crate cluster near guard 2 for the cover shot.
+      // Park the player mid-sneak between crates near guard 2 for the cover shot.
       state2.player.x = 520;
       state2.player.y = 400;
       state2.player.facing = Math.PI;
+      state2.player.sneaking = true;
     }
     if (shot === 'museum') {
       // Museum wing: guard sweeping the hall, camera mid-sweep, keycard glinting.
@@ -239,6 +246,10 @@ function boot() {
       }
       state2.guards[0].state = STATE_ALERT;
       state2.guards[0].suspicion = 64;
+      state2.guards[0].facing = Math.atan2(
+        state2.player.y - state2.guards[0].y,
+        state2.player.x - state2.guards[0].x,
+      );
       state2.maxSuspicion = 64;
     }
     if (shot === 'vault') {
@@ -255,7 +266,17 @@ function boot() {
       state2.guards[2].suspicion = 70;
       state2.maxSuspicion = 70;
     }
+    if (shot === 'vault') {
+      // Alarm-red edge wash for the vault still.
+      state2.vaultAlarm = true;
+    }
+    if (shot === 'museum') {
+      state2.vaultAlarm = true;
+    }
     state2.elapsed = Math.max(state2.elapsed, 12.4);
+    // Cinematic zoom toward the action — render() zooms the world around the
+    // player and keeps HUD/vignette in screen space.
+    state2.cameraZoom = shot === 'start' ? 1.0 : shot === 'play' ? 1.35 : 1.22;
     render(ctx, screen, state2);
     input.endFrame();
     window.__shotReady = true;

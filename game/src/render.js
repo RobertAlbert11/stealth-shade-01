@@ -9,6 +9,26 @@ export const SCREEN_PLAY = 'play';
 export const SCREEN_OVER = 'over';
 export const SCREEN_WIN = 'win';
 
+function drawLightPools(ctx, state) {
+  const pools = state?.level?.lightPools ?? [];
+  const color = state?.level?.palette?.lightPool ?? 'rgba(255, 214, 130, 0.06)';
+  // Higher-contrast cinematic pools: bright core, soft falloff.
+  for (const p of pools) {
+    const grad = ctx.createRadialGradient(p.x, p.y, 8, p.x, p.y, p.r);
+    grad.addColorStop(0, color);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+    // Warm lamp bulb dot at the pool centre
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 226, 160, 0.85)';
+    ctx.fill();
+  }
+}
+
 function drawWarehouse(ctx, state) {
   const pal = state?.level?.palette ?? {};
   const walls = state?.level?.walls ?? getWalls();
@@ -24,6 +44,7 @@ function drawWarehouse(ctx, state) {
   for (let y = 0; y <= FIELD.height; y += 80) {
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(FIELD.width, y); ctx.stroke();
   }
+  drawLightPools(ctx, state);
   // Exit zone
   ctx.fillStyle = PALETTE.exit;
   ctx.globalAlpha = 0.25;
@@ -66,6 +87,40 @@ function drawCone(ctx, guard) {
   const alerting = guard.state === STATE_ALERT || guard.suspicion > 55;
   ctx.fillStyle = alerting ? PALETTE.coneAlert : PALETTE.cone;
   ctx.fill();
+  // Glowing cone rim so the beam pops off the floor.
+  ctx.strokeStyle = alerting ? 'rgba(255, 90, 60, 0.55)' : 'rgba(255, 214, 110, 0.45)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function drawAlarmGlow(ctx, state) {
+  // Pulsing red wash when any guard/camera is hot — reads as alarm in stills.
+  const hottest = Math.max(
+    state?.maxSuspicion ?? 0,
+    ...(state?.guards ?? []).map((g) => g.suspicion ?? 0),
+    ...(state?.cameras ?? []).map((c) => c.suspicion ?? 0),
+  );
+  if (hottest < 45) return;
+  const intensity = Math.min(0.28, (hottest - 45) / 220);
+  const grad = ctx.createRadialGradient(
+    FIELD.width / 2, FIELD.height / 2, FIELD.height * 0.2,
+    FIELD.width / 2, FIELD.height / 2, FIELD.width * 0.72,
+  );
+  grad.addColorStop(0, 'rgba(255, 40, 20, 0)');
+  grad.addColorStop(1, `rgba(255, 40, 20, ${intensity})`);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, FIELD.width, FIELD.height);
+}
+
+function drawVignette(ctx) {
+  const grad = ctx.createRadialGradient(
+    FIELD.width / 2, FIELD.height / 2, FIELD.height * 0.42,
+    FIELD.width / 2, FIELD.height / 2, FIELD.width * 0.68,
+  );
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.42)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, FIELD.width, FIELD.height);
 }
 
 function drawGuard(ctx, guard) {
@@ -194,35 +249,44 @@ function centerPanel(ctx, lines) {
 export function render(ctx, screen, state) {
   ctx.fillStyle = PALETTE.backdrop;
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+  const zoom = state?.cameraZoom ?? 1;
+  const zoomed = zoom !== 1 && !!state?.player;
+  if (zoomed) {
+    // Cinematic camera: zoom the world toward the player, HUD stays screen-fixed.
+    ctx.save();
+    ctx.translate(FIELD.width / 2, FIELD.height / 2);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-state.player.x, -state.player.y);
+  }
   drawWarehouse(ctx, state);
+  for (const g of state.guards) drawGuard(ctx, g);
+  drawPlayer(ctx, state.player);
+  if (zoomed) ctx.restore();
 
   if (screen === SCREEN_PLAY) {
-    for (const g of state.guards) drawGuard(ctx, g);
-    drawPlayer(ctx, state.player);
     drawHud(ctx, state);
-  } else {
-    for (const g of state.guards) drawGuard(ctx, g);
-    drawPlayer(ctx, state.player);
-    if (screen === SCREEN_TITLE) {
-      centerPanel(ctx, [
-        ['SHADE RUN', 'bold 42px monospace', PALETTE.accent],
-        ['Slip through the warehouse unseen.', '16px monospace', PALETTE.text],
-        ['WASD / Arrows: move   Shift: sneak   Walk noise alerts guards', '13px monospace', PALETTE.dim],
-        ['Reach the EXIT without being caught.', '13px monospace', PALETTE.dim],
-        ['Press ENTER or SPACE to start', 'bold 16px monospace', PALETTE.player],
-      ]);
-    } else if (screen === SCREEN_OVER) {
-      centerPanel(ctx, [
-        ['CAUGHT!', 'bold 42px monospace', PALETTE.guardAlertMax],
-        [`You survived ${state.elapsed.toFixed(1)}s before the alarm.`, '16px monospace', PALETTE.text],
-        ['Press ENTER or SPACE to try again', 'bold 16px monospace', PALETTE.player],
-      ]);
-    } else if (screen === SCREEN_WIN) {
-      centerPanel(ctx, [
-        ['CLEAN ESCAPE', 'bold 42px monospace', PALETTE.player],
-        [`Reached the exit in ${state.elapsed.toFixed(1)}s, unseen.`, '16px monospace', PALETTE.text],
-        ['Press ENTER or SPACE to play again', 'bold 16px monospace', PALETTE.player],
-      ]);
-    }
+  } else if (screen === SCREEN_TITLE) {
+    centerPanel(ctx, [
+      ['SHADE RUN', 'bold 42px monospace', PALETTE.accent],
+      ['Slip through the warehouse unseen.', '16px monospace', PALETTE.text],
+      ['WASD / Arrows: move   Shift: sneak   Walk noise alerts guards', '13px monospace', PALETTE.dim],
+      ['Reach the EXIT without being caught.', '13px monospace', PALETTE.dim],
+      ['Press ENTER or SPACE to start', 'bold 16px monospace', PALETTE.player],
+    ]);
+  } else if (screen === SCREEN_OVER) {
+    centerPanel(ctx, [
+      ['CAUGHT!', 'bold 42px monospace', PALETTE.guardAlertMax],
+      [`You survived ${state.elapsed.toFixed(1)}s before the alarm.`, '16px monospace', PALETTE.text],
+      ['Press ENTER or SPACE to try again', 'bold 16px monospace', PALETTE.player],
+    ]);
+  } else if (screen === SCREEN_WIN) {
+    centerPanel(ctx, [
+      ['CLEAN ESCAPE', 'bold 42px monospace', PALETTE.player],
+      [`Reached the exit in ${state.elapsed.toFixed(1)}s, unseen.`, '16px monospace', PALETTE.text],
+      ['Press ENTER or SPACE to play again', 'bold 16px monospace', PALETTE.player],
+    ]);
   }
+  drawAlarmGlow(ctx, state);
+  drawVignette(ctx);
 }

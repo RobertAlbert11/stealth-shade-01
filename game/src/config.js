@@ -10,10 +10,10 @@ export const PALETTE = {
   guard: '#e05555',
   guardAlert: '#ffb03b',
   guardAlertMax: '#ff4d2e',
-  cone: 'rgba(255, 220, 120, 0.16)',
-  coneAlert: 'rgba(255, 90, 60, 0.22)',
-  camCone: 'rgba(120, 200, 255, 0.14)',
-  camConeAlert: 'rgba(255, 120, 220, 0.2)',
+  cone: 'rgba(255, 214, 110, 0.30)',
+  coneAlert: 'rgba(255, 80, 50, 0.42)',
+  camCone: 'rgba(120, 200, 255, 0.22)',
+  camConeAlert: 'rgba(255, 120, 220, 0.34)',
   exit: '#4fc3f7',
   text: '#dfe8f2',
   dim: '#8b98a8',
@@ -186,7 +186,7 @@ export const LEVELS = [
 export const EXIT_ZONE = LEVELS[0].exit;
 
 export const PLAYER = {
-  radius: 11,
+  radius: 14,
   walkSpeed: 175,
   sneakSpeed: 85,
   walkNoiseRadius: 160,
@@ -194,7 +194,7 @@ export const PLAYER = {
 };
 
 export const GUARD = {
-  radius: 12,
+  radius: 15,
   patrolSpeed: 90,
   alertSpeed: 160,
   coneHalfAngle: Math.PI / 5,
