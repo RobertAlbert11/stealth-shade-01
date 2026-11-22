@@ -50,6 +50,11 @@ export function playAlarm() {
   setTimeout(() => blip(660, 0.4, 'sawtooth', 0.1), 220);
 }
 
+export function playKeycard() {
+  blip(700, 0.12, 'sine', 0.07);
+  setTimeout(() => blip(1050, 0.18, 'sine', 0.07), 100);
+}
+
 export function playWinChime() {
   blip(660, 0.15, 'sine', 0.08);
   setTimeout(() => blip(880, 0.2, 'sine', 0.08), 140);

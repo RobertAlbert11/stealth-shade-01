@@ -1,6 +1,6 @@
 // Shade Run — flat 2D canvas renderer: warehouse, cones, entities, HUD, screens.
 import { EXIT_ZONE, FIELD, GUARD, PALETTE, PLAYER } from './config.js';
-import { CRATES, WALLS } from './world.js';
+import { getCrates, getWalls } from './world.js';
 import { conePolygon } from './vision.js';
 import { STATE_ALERT, STATE_INVESTIGATE } from './guards.js';
 
@@ -34,13 +34,13 @@ function drawWarehouse(ctx) {
   ctx.fillText('EXIT', EXIT_ZONE.x + EXIT_ZONE.w / 2, EXIT_ZONE.y + EXIT_ZONE.h / 2 + 5);
   ctx.textAlign = 'left';
 
-  for (const w of WALLS) {
+  for (const w of getWalls()) {
     ctx.fillStyle = PALETTE.wall;
     ctx.fillRect(w.x, w.y, w.w, w.h);
     ctx.strokeStyle = PALETTE.wallEdge;
     ctx.strokeRect(w.x + 0.5, w.y + 0.5, w.w - 1, w.h - 1);
   }
-  for (const c of CRATES) {
+  for (const c of getCrates()) {
     ctx.fillStyle = PALETTE.crate;
     ctx.fillRect(c.x, c.y, c.w, c.h);
     ctx.strokeStyle = PALETTE.crateEdge;
@@ -123,9 +123,9 @@ function drawMinimap(ctx, guards, player) {
   ctx.lineWidth = 1;
   ctx.strokeRect(mx + 0.5, my + 0.5, mw - 1, mh - 1);
   ctx.fillStyle = PALETTE.wallEdge;
-  for (const w of WALLS) ctx.fillRect(mx + w.x * sx, my + w.y * sy, Math.max(1, w.w * sx), Math.max(1, w.h * sy));
+  for (const w of getWalls()) ctx.fillRect(mx + w.x * sx, my + w.y * sy, Math.max(1, w.w * sx), Math.max(1, w.h * sy));
   ctx.fillStyle = PALETTE.crateEdge;
-  for (const c of CRATES) ctx.fillRect(mx + c.x * sx, my + c.y * sy, Math.max(1, c.w * sx), Math.max(1, c.h * sy));
+  for (const c of getCrates()) ctx.fillRect(mx + c.x * sx, my + c.y * sy, Math.max(1, c.w * sx), Math.max(1, c.h * sy));
   ctx.fillStyle = PALETTE.exit;
   ctx.fillRect(mx + EXIT_ZONE.x * sx, my + EXIT_ZONE.y * sy, EXIT_ZONE.w * sx, EXIT_ZONE.h * sy);
   for (const g of guards) {

@@ -220,9 +220,8 @@ export const CAMERA = {
 };
 
 // Panels: stand nearby and press E to disable every camera on the level.
-export const PANEL = { w: 22, h: 22, useRadius: 60 };
-
-export const KEYCARD = { pickupRadius: 22 };
+export const PANEL = { w: 24, h: 24, useRadius: 60 };
+export const KEYCARD = { size: 16, pickupRadius: 26 };
 export const DOOR = { openRadius: 46 };
 
 // Score: per level — base + time bonus + keycards + stealth bonus.

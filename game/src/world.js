@@ -1,16 +1,26 @@
-// Shade Run — level world: builds walls, crates and collision from LEVELS.
-import { FIELD, LEVELS, PLAYER } from './config.js';
+// Shade Run — level world: walls, crates, doors, collision, line of sight.
+import { DOOR, FIELD, LEVELS, PLAYER, KEYCARD } from './config.js';
 
 // Active level geometry (defaults to level 1: warehouse).
 let WALLS_ = LEVELS[0].walls;
 let CRATES_ = LEVELS[0].crates;
+let DOORS_ = [];
+let KEYCARDS_ = [];
 
-// Build the world for a level index; returns the level definition.
+// Build the world for a level index; returns a live world handle.
 export function createWorld(levelIndex) {
   const level = LEVELS[levelIndex] ?? LEVELS[0];
   WALLS_ = level.walls;
   CRATES_ = level.crates;
-  return level;
+  // Mutable door instances: open (vanish from collision + sight) when unlocked.
+  DOORS_ = (level.doors ?? []).map((d) => ({ ...d, open: false }));
+  // Mutable keycard pickups: 'taken' once collected.
+  KEYCARDS_ = (level.keycards ?? []).map((k) => ({ ...k, taken: false }));
+  return {
+    level,
+    get doors() { return DOORS_; },
+    get keycards() { return KEYCARDS_; },
+  };
 }
 
 // Live view of the active level's geometry (walls + cover crates).
@@ -20,6 +30,40 @@ export function getWalls() {
 
 export function getCrates() {
   return CRATES_;
+}
+
+export function getDoors() {
+  return DOORS_;
+}
+
+// Pick up keycards the player walks over. Returns number picked up.
+export function pickupKeycards(player) {
+  if (!KEYCARDS_.length) return 0;
+  let picked = 0;
+  for (const card of KEYCARDS_) {
+    if (card.taken) continue;
+    if (Math.hypot(player.x - card.x, player.y - card.y) <= KEYCARD.pickupRadius) {
+      card.taken = true;
+      picked += 1;
+    }
+  }
+  return picked;
+}
+
+// Try to open any door the player is near while holding the keycard. Returns count opened.
+export function tryOpenDoor(player, hasKeycard) {
+  if (!DOORS_.length || !hasKeycard) return 0;
+  let opened = 0;
+  for (const door of DOORS_) {
+    if (door.open || !door.requiresCard) continue;
+    const cx = Math.max(door.x, Math.min(player.x, door.x + door.w));
+    const cy = Math.max(door.y, Math.min(player.y, door.y + door.h));
+    if (Math.hypot(player.x - cx, player.y - cy) <= DOOR.openRadius) {
+      door.open = true;
+      opened += 1;
+    }
+  }
+  return opened;
 }
 
 export function rectOverlap(a, b) {
@@ -41,6 +85,7 @@ export function isBlocked(px, py, r) {
   const point = { x: px - r, y: py - r, w: r * 2, h: r * 2 };
   for (const rect of WALLS_) if (rectOverlap(point, rect)) return true;
   for (const rect of CRATES_) if (rectOverlap(point, rect)) return true;
+  for (const door of DOORS_) if (!door.open && rectOverlap(point, door)) return true;
   return false;
 }
 
@@ -61,11 +106,15 @@ export function inExitZone(px, py, exit) {
     && py > zone.y && py < zone.y + zone.h;
 }
 
-// Segment vs rectangles: true if the segment (x1,y1)-(x2,y2) hits any wall/crate.
+// Segment vs rectangles: true if the segment (x1,y1)-(x2,y2) hits any cover.
+// Closed doors also block sight.
 export function segmentHitsCover(x1, y1, x2, y2) {
   const rects = WALLS_.concat(CRATES_);
   for (const rect of rects) {
     if (segmentRectHit(x1, y1, x2, y2, rect)) return true;
+  }
+  for (const door of DOORS_) {
+    if (!door.open && segmentRectHit(x1, y1, x2, y2, door)) return true;
   }
   return false;
 }
