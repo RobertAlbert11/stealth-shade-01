@@ -9,10 +9,14 @@ export const SCREEN_PLAY = 'play';
 export const SCREEN_OVER = 'over';
 export const SCREEN_WIN = 'win';
 
-function drawWarehouse(ctx) {
-  ctx.fillStyle = PALETTE.floor;
+function drawWarehouse(ctx, state) {
+  const pal = state?.level?.palette ?? {};
+  const walls = state?.level?.walls ?? getWalls();
+  const crates = state?.level?.crates ?? getCrates();
+  const exit = state?.level?.exitZone ?? EXIT_ZONE;
+  ctx.fillStyle = pal.floor ?? PALETTE.floor;
   ctx.fillRect(0, 0, FIELD.width, FIELD.height);
-  ctx.strokeStyle = PALETTE.floorGrid;
+  ctx.strokeStyle = pal.floorGrid ?? PALETTE.floorGrid;
   ctx.lineWidth = 1;
   for (let x = 0; x <= FIELD.width; x += 80) {
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, FIELD.height); ctx.stroke();
@@ -23,33 +27,33 @@ function drawWarehouse(ctx) {
   // Exit zone
   ctx.fillStyle = PALETTE.exit;
   ctx.globalAlpha = 0.25;
-  ctx.fillRect(EXIT_ZONE.x, EXIT_ZONE.y, EXIT_ZONE.w, EXIT_ZONE.h);
+  ctx.fillRect(exit.x, exit.y, exit.w, exit.h);
   ctx.globalAlpha = 1;
   ctx.strokeStyle = PALETTE.exit;
   ctx.lineWidth = 2;
-  ctx.strokeRect(EXIT_ZONE.x, EXIT_ZONE.y, EXIT_ZONE.w, EXIT_ZONE.h);
+  ctx.strokeRect(exit.x, exit.y, exit.w, exit.h);
   ctx.fillStyle = PALETTE.exit;
   ctx.font = 'bold 14px monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('EXIT', EXIT_ZONE.x + EXIT_ZONE.w / 2, EXIT_ZONE.y + EXIT_ZONE.h / 2 + 5);
+  ctx.fillText('EXIT', exit.x + exit.w / 2, exit.y + exit.h / 2 + 5);
   ctx.textAlign = 'left';
 
-  for (const w of getWalls()) {
-    ctx.fillStyle = PALETTE.wall;
+  for (const w of walls) {
+    ctx.fillStyle = pal.wall ?? PALETTE.wall;
     ctx.fillRect(w.x, w.y, w.w, w.h);
-    ctx.strokeStyle = PALETTE.wallEdge;
+    ctx.strokeStyle = pal.wallEdge ?? PALETTE.wallEdge;
     ctx.strokeRect(w.x + 0.5, w.y + 0.5, w.w - 1, w.h - 1);
   }
-  for (const c of getCrates()) {
-    ctx.fillStyle = PALETTE.crate;
+  for (const c of crates) {
+    ctx.fillStyle = pal.crate ?? PALETTE.crate;
     ctx.fillRect(c.x, c.y, c.w, c.h);
-    ctx.strokeStyle = PALETTE.crateEdge;
+    ctx.strokeStyle = pal.crateEdge ?? PALETTE.crateEdge;
     ctx.lineWidth = 2;
     ctx.strokeRect(c.x + 1, c.y + 1, c.w - 2, c.h - 2);
     ctx.beginPath();
     ctx.moveTo(c.x + 4, c.y + 4); ctx.lineTo(c.x + c.w - 4, c.y + c.h - 4);
     ctx.moveTo(c.x + c.w - 4, c.y + 4); ctx.lineTo(c.x + 4, c.y + c.h - 4);
-    ctx.strokeStyle = PALETTE.crateEdge; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = pal.crateEdge ?? PALETTE.crateEdge; ctx.lineWidth = 1; ctx.stroke();
   }
 }
 
@@ -190,7 +194,7 @@ function centerPanel(ctx, lines) {
 export function render(ctx, screen, state) {
   ctx.fillStyle = PALETTE.backdrop;
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  drawWarehouse(ctx);
+  drawWarehouse(ctx, state);
 
   if (screen === SCREEN_PLAY) {
     for (const g of state.guards) drawGuard(ctx, g);
